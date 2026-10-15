@@ -1,0 +1,7 @@
+' Общие обозначения для C4-диаграмм
+' Граница доверия — красный пунктир с номером в подписи связи
+AddRelTag("tb", $lineColor="#C00000", $textColor="#C00000", $lineStyle=DashedLine(), $legendText="граница доверия (номер в подписи)")
+' Звено с обучаемой моделью
+AddElementTag("model", $bgColor="#7B3FA0", $borderColor="#4B1F6A", $fontColor="#FFFFFF", $legendText="звено с моделью")
+' Внешний контур (облако пилота)
+AddBoundaryTag("cloud", $borderColor="#8A6D00", $fontColor="#8A6D00", $bgColor="#FFFBEB", $borderStyle=DashedLine(), $legendText="внешний контур (облако пилота)")
