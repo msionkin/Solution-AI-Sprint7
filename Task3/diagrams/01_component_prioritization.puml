@@ -1,0 +1,47 @@
+@startuml 01_component_prioritization
+!include <C4/C4_Component>
+!include _style.puml
+
+title №1. Сервис приоритизации — Component (целевой прод)
+
+ContainerQueue(t_flags, "flagged-operations", "Kafka topic", "Помеченные операции")
+ContainerQueue(t_prio, "operation-priorities", "Kafka topic", "Приоритеты операций")
+ContainerDb(db, "БД сервиса", "PostgreSQL", "Ночной снимок признаков, оценки, журнал аудита, задания на разметку")
+Container(reg, "Реестр моделей", "MLflow", "Утверждённая версия модели и параметры нормировки")
+Container(mon, "Мониторинг", "Prometheus, Grafana, Evidently", "Метрики и алерты")
+
+Container_Boundary(prio, "Сервис приоритизации") {
+  Component(consumer, "Приёмник пометок", "Python, Kafka consumer", "Дедупликация по operation_id; микропакет каждые 15 мин; ночью — вся открытая очередь")
+  Component(sampler, "Формирователь контрольной выборки", "Python", "Стратифицированный случайный отбор ~24 операций в день до оценки; 20% — на двойную разметку")
+  Component(assembler, "Сборщик признаков", "Python, Polars", "Поля события + ночной снимок; проверка полноты и свежести")
+  Component(applic, "Контроль применимости", "Python", "Нет истории, значения вне диапазона обучения, новые категории")
+  Component(model, "Модель ранжирования", "scikit-learn / CatBoost", "Сырая оценка и вклад признаков (SHAP)", $tags="model")
+  Component(norm, "Нормировка и рабочая точка", "Python", "Перцентиль внутри сегмента; линия ёмкости K; зона воздержания")
+  Component(fallback, "Резервный скор", "Python", "Скор правил и KYC (baseline) при отказе модели или вне области применимости")
+  Component(rules, "Правила очереди", "Python", "Полосы: срочные (ПВК, приостановки), контрольная выборка, ранжируемые; нижняя граница по сигналу правила")
+  Component(validator, "Валидатор контракта", "Python, JSON Schema", "Схема, полнота пакета, инварианты полос, распределение оценок")
+  Component(publisher, "Публикатор и журнал", "Python, Kafka producer", "Идемпотентная публикация; запись в журнал аудита")
+}
+
+Rel(t_flags, consumer, "Помеченные операции")
+Rel(consumer, sampler, "Пакет операций")
+Rel(sampler, db, "Задания на разметку")
+Rel(sampler, assembler, "Пакет с отметкой выборки")
+Rel(db, assembler, "Снимок признаков")
+Rel(assembler, applic, "Вектор признаков и флаги качества")
+Rel(applic, model, "Применимые операции")
+Rel(applic, fallback, "Неприменимые операции с кодом причины")
+Rel(reg, model, "Версия модели")
+Rel(reg, norm, "Параметры нормировки")
+Rel(model, norm, "Сырая оценка, факторы")
+Rel(norm, rules, "Перцентиль, признак зоны воздержания")
+Rel(fallback, rules, "Резервный перцентиль")
+Rel(rules, validator, "Полоса, ранг, факторы")
+Rel(validator, fallback, "Пакет не прошёл проверку → пересчёт по правилам")
+Rel(validator, publisher, "Валидный пакет")
+Rel(publisher, t_prio, "[ГД-3] Приоритеты", $tags="tb")
+Rel(publisher, db, "Журнал аудита")
+Rel(prio, mon, "Метрики всех компонентов")
+
+SHOW_LEGEND()
+@enduml
